@@ -6,7 +6,7 @@ import ChatInterface from '@/components/greasy-man/ChatInterface';
 import ChatList from '@/components/greasy-man/ChatList';
 import ApiConfig, { ApiConfigData } from '@/components/greasy-man/ApiConfig';
 import GodModeModal from '@/components/greasy-man/GodModeModal';
-import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react';
 
 // 默认API配置
 const DEFAULT_API_CONFIG: ApiConfigData = {
@@ -18,6 +18,8 @@ const DEFAULT_API_CONFIG: ApiConfigData = {
 export default function GreasyManPage() {
   // API配置
   const [apiConfig, setApiConfig] = useState<ApiConfigData>(DEFAULT_API_CONFIG);
+  const [serverConfigured, setServerConfigured] = useState(false);
+  const [isCheckingConfig, setIsCheckingConfig] = useState(true);
   
   // 角色档案
   const [profileA, setProfileA] = useState<GreasyManProfile | undefined>();
@@ -38,6 +40,33 @@ export default function GreasyManPage() {
   const [godMode, setGodMode] = useState(false);
   const [showGodModal, setShowGodModal] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // 检查服务器端配置
+  useEffect(() => {
+    const checkServerConfig = async () => {
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const config = await res.json();
+          if (config.hasApiKey && config.hasApiUrl) {
+            // 服务器已配置，自动设置API配置
+            setApiConfig({
+              apiKey: 'server-configured', // 标记为服务器配置
+              apiUrl: config.apiUrl,
+              model: config.model,
+            });
+            setServerConfigured(true);
+          }
+        }
+      } catch (e) {
+        console.error('获取服务器配置失败:', e);
+      } finally {
+        setIsCheckingConfig(false);
+      }
+    };
+
+    checkServerConfig();
+  }, []);
 
   // 加载保存的数据
   useEffect(() => {
@@ -229,13 +258,13 @@ export default function GreasyManPage() {
             if (!resB.ok) throw new Error('获取回复失败');
             const dataB = await resB.json();
             setMessagesGroup(prev => [...prev, dataB.message]);
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error('B回复失败:', err);
           }
         }, 1500);
       }
-    } catch (err: any) {
-      setError(err.message || '发送消息失败');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '发送消息失败');
     } finally {
       setIsLoading(false);
     }
@@ -264,7 +293,20 @@ export default function GreasyManPage() {
             <p className="text-gray-600">体验与两个油腻男&quot;愉快&quot;聊天的感觉</p>
           </div>
 
-          <ApiConfig config={apiConfig} onConfigChange={setApiConfig} />
+          {/* 服务器配置状态 */}
+          {isCheckingConfig ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-gray-500">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">检查服务器配置...</span>
+            </div>
+          ) : serverConfigured ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-green-600 bg-green-50 rounded-lg mb-4">
+              <CheckCircle className="w-5 h-5" />
+              <span className="text-sm font-medium">✅ 服务已配置，可直接开始</span>
+            </div>
+          ) : (
+            <ApiConfig config={apiConfig} onConfigChange={setApiConfig} />
+          )}
 
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-600 text-sm">
@@ -275,7 +317,7 @@ export default function GreasyManPage() {
 
           <button
             onClick={generateCharacters}
-            disabled={isGenerating || !apiConfig.apiKey}
+            disabled={isGenerating || (!serverConfigured && !apiConfig.apiKey)}
             className="w-full mt-6 py-3 px-6 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
           >
             {isGenerating ? (
@@ -292,8 +334,9 @@ export default function GreasyManPage() {
           </button>
 
           <p className="mt-4 text-xs text-gray-400 text-center">
-            点击按钮生成两个随机的油腻男角色<br/>
-            他们会陪你聊天，记得开启上帝视角查看他们的真面目
+            {serverConfigured 
+              ? '点击按钮生成两个随机的油腻男角色'
+              : '点击按钮生成两个随机的油腻男角色\n他们会陪你聊天，记得开启上帝视角查看他们的真面目'}
           </p>
         </div>
       </div>
@@ -304,7 +347,7 @@ export default function GreasyManPage() {
     <div className="h-screen bg-gray-100 flex">
       {/* 左侧聊天列表 */}
       <div className="w-full max-w-sm h-full border-r border-gray-300 flex flex-col">
-        <ApiConfig config={apiConfig} onConfigChange={setApiConfig} />
+        {!serverConfigured && <ApiConfig config={apiConfig} onConfigChange={setApiConfig} />}
         <div className="flex-1 overflow-hidden">
           <ChatList
             currentChat={currentChat}
