@@ -17,12 +17,14 @@ export async function POST(req: NextRequest) {
     const body: ChatRequest = await req.json();
     
     // 优先从请求体获取配置，否则使用环境变量
-    const apiKey = body.apiKey || process.env.GREASY_API_KEY;
-    const apiUrl = body.apiUrl || process.env.GREASY_API_URL;
+    // 如果前端发送 'server-configured'，说明要使用服务器环境变量
+    const apiKey = body.apiKey === 'server-configured' ? process.env.GREASY_API_KEY : (body.apiKey || process.env.GREASY_API_KEY);
+    const apiUrl = body.apiUrl === 'server-configured' ? process.env.GREASY_API_URL : (body.apiUrl || process.env.GREASY_API_URL);
     const model = body.model || process.env.GREASY_MODEL || 'gpt-4';
     const { profile, otherProfile, messages, chatType, senderType } = body;
 
     if (!apiKey || !apiUrl || !profile) {
+      console.error('缺少必要参数:', { hasKey: !!apiKey, hasUrl: !!apiUrl, hasProfile: !!profile });
       return NextResponse.json(
         { error: '缺少必要参数，请在环境变量或前端配置中设置API' },
         { status: 400 }
@@ -58,8 +60,9 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text();
+      console.error('API调用失败:', response.status, error);
       return NextResponse.json(
-        { error: `API调用失败: ${error}` },
+        { error: `API调用失败(${response.status}): ${error.slice(0, 200)}` },
         { status: 500 }
       );
     }
